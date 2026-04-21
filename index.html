@@ -111,6 +111,41 @@ input[type="range"].ls:hover::-webkit-slider-thumb {
   cursor: not-allowed;
 }
 
+/* Input numerico inline per valore preciso */
+.val-input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 6px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.2;
+  outline: none;
+  transition: all .12s ease;
+  width: 120px;
+  -moz-appearance: textfield;
+}
+.val-input::-webkit-outer-spin-button,
+.val-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.val-input:hover {
+  background: rgb(248 250 252);
+  border-color: rgb(226 232 240);
+}
+.val-input:focus {
+  background: #ffffff;
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+.val-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 input[type="range"].ls:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
@@ -303,6 +338,39 @@ function simulatorData() {
       return 1;
     },
 
+    // Parsa e sanitizza valori digitati manualmente dall'utente.
+    // Supporta formato italiano: "1.500" → 1500, "1.500,50" → 1500.50,
+    // e formato puro: "1500" → 1500, "1500.5" → 1500.5
+    setValue(campo, rawValue, max) {
+      let s = String(rawValue).trim().replace(/[^\d.,-]/g, '');
+      if (!s) { this[campo] = 0; return; }
+
+      const hasComma = s.includes(',');
+      const hasDot = s.includes('.');
+
+      let normalized;
+      if (hasComma && hasDot) {
+        // Formato italiano completo: "1.500,50" → punti migliaia, virgola decimale
+        normalized = s.replace(/\./g, '').replace(',', '.');
+      } else if (hasComma) {
+        // Solo virgola → decimale italiano: "1500,5" → 1500.5
+        normalized = s.replace(',', '.');
+      } else if (hasDot) {
+        // Solo punto: ambiguo. Se tutti i gruppi sono da 3 cifre → migliaia.
+        // Altrimenti è un decimale inglese.
+        const parti = s.split('.');
+        const migliaia = parti.length > 1 && parti.slice(1).every(p => p.length === 3);
+        normalized = migliaia ? s.replace(/\./g, '') : s;
+      } else {
+        normalized = s;
+      }
+
+      let v = parseFloat(normalized);
+      if (isNaN(v) || v < 0) v = 0;
+      if (v > max) v = max;
+      this[campo] = Math.round(v);
+    },
+
     // Incremento/decremento via bottoni + / -
     nudge(campo, tipo, direzione, max) {
       const curr = this[campo];
@@ -470,8 +538,13 @@ ${r?'Expression: "'+r+`"
           <div>
             <div class="flex items-baseline justify-between mb-2">
               <label class="text-sm font-medium text-slate-700">Potenza installata</label>
-              <div class="text-xl font-semibold tabular" :class="cm(tec.color).text">
-                <span x-text="fmtNum(potenza)"></span>
+              <div class="flex items-baseline gap-1" :class="cm(tec.color).text">
+                <input type="text" inputmode="numeric"
+                       class="val-input"
+                       :value="fmtNum(potenza)"
+                       @change="setValue('potenza', $event.target.value, tec.maxPotenza)"
+                       @focus="$event.target.select()"
+                       @keydown.enter="$event.target.blur()">
                 <span class="text-xs font-normal text-slate-500" x-text="tec.unita"></span>
               </div>
             </div>
@@ -496,8 +569,14 @@ ${r?'Expression: "'+r+`"
           <div>
             <div class="flex items-baseline justify-between mb-2">
               <label class="text-sm font-medium text-slate-700">Costo effettivo</label>
-              <div class="text-xl font-semibold tabular" :class="cm(tec.color).text">
-                <span x-text="fmtEuroM(costo)"></span>
+              <div class="flex items-baseline gap-1" :class="cm(tec.color).text">
+                <span class="text-sm font-normal text-slate-500">€</span>
+                <input type="text" inputmode="numeric"
+                       class="val-input"
+                       :value="fmtNum(costo)"
+                       @change="setValue('costo', $event.target.value, 25000000)"
+                       @focus="$event.target.select()"
+                       @keydown.enter="$event.target.blur()">
               </div>
             </div>
             <div class="flex items-center gap-2">
@@ -543,8 +622,14 @@ ${r?'Expression: "'+r+`"
           <div>
             <div class="flex items-baseline justify-between mb-2">
               <label class="text-sm font-medium text-slate-700">Capacità installata</label>
-              <div class="text-xl font-semibold tabular text-violet-700">
-                <span x-text="fmtNum(accKWh)"></span>
+              <div class="flex items-baseline gap-1 text-violet-700">
+                <input type="text" inputmode="numeric"
+                       class="val-input"
+                       :value="fmtNum(accKWh)"
+                       @change="setValue('accKWh', $event.target.value, 5000)"
+                       @focus="$event.target.select()"
+                       @keydown.enter="$event.target.blur()"
+                       :disabled="!accumuloDisponibile">
                 <span class="text-xs font-normal text-slate-500">kWh</span>
               </div>
             </div>
@@ -570,8 +655,15 @@ ${r?'Expression: "'+r+`"
           <div>
             <div class="flex items-baseline justify-between mb-2">
               <label class="text-sm font-medium text-slate-700">Costo effettivo accumulo</label>
-              <div class="text-xl font-semibold tabular text-violet-700">
-                <span x-text="fmtEuroM(accCosto)"></span>
+              <div class="flex items-baseline gap-1 text-violet-700">
+                <span class="text-sm font-normal text-slate-500">€</span>
+                <input type="text" inputmode="numeric"
+                       class="val-input"
+                       :value="fmtNum(accCosto)"
+                       @change="setValue('accCosto', $event.target.value, 5000000)"
+                       @focus="$event.target.select()"
+                       @keydown.enter="$event.target.blur()"
+                       :disabled="!accumuloDisponibile">
               </div>
             </div>
             <div class="flex items-center gap-2">
