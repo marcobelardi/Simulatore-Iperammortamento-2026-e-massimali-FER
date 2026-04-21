@@ -216,6 +216,21 @@ function simulatorData() {
       return (this.magg.dett[idx].applicato / tot) * 100;
     },
 
+    // Mapping logaritmico: slider 0-1000 → valore reale, con maggiore risoluzione sui valori bassi
+    // Usa la trasformazione (exp(k*p) - 1) / (exp(k) - 1) con k=4 per una curva moderata
+    sliderToVal(slider, max, step) {
+      const p = slider / 1000;
+      const k = 4;
+      const val = max * (Math.exp(k * p) - 1) / (Math.exp(k) - 1);
+      return Math.round(val / step) * step;
+    },
+    valToSlider(val, max) {
+      if (val <= 0) return 0;
+      const k = 4;
+      const p = Math.log(val / max * (Math.exp(k) - 1) + 1) / k;
+      return Math.max(0, Math.min(1000, Math.round(p * 1000)));
+    },
+
     fmtEuro(n) { return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0); },
     fmtEuroM(n) {
       n = n || 0;
@@ -361,8 +376,10 @@ ${r?'Expression: "'+r+`"
               </div>
             </div>
             <div class="ls-wrapper" :style="sliderStyle(tec.color)">
-              <div class="ls-fill" :style="'width:' + pct(potenza, 0, tec.maxPotenza) + '%'"></div>
-              <input type="range" class="ls relative" x-model.number="potenza" :min="0" :max="tec.maxPotenza" step="10">
+              <div class="ls-fill" :style="'width:' + (valToSlider(potenza, tec.maxPotenza) / 10) + '%'"></div>
+              <input type="range" class="ls relative" min="0" max="1000" step="1"
+                     :value="valToSlider(potenza, tec.maxPotenza)"
+                     @input="potenza = sliderToVal($event.target.value, tec.maxPotenza, 1)">
             </div>
             <div class="flex justify-between text-xs text-slate-400 mt-1">
               <span>0</span>
@@ -378,8 +395,10 @@ ${r?'Expression: "'+r+`"
               </div>
             </div>
             <div class="ls-wrapper" :style="sliderStyle(tec.color)">
-              <div class="ls-fill" :style="'width:' + pct(costo, 0, 25000000) + '%'"></div>
-              <input type="range" class="ls relative" x-model.number="costo" :min="0" :max="25000000" step="10000">
+              <div class="ls-fill" :style="'width:' + (valToSlider(costo, 25000000) / 10) + '%'"></div>
+              <input type="range" class="ls relative" min="0" max="1000" step="1"
+                     :value="valToSlider(costo, 25000000)"
+                     @input="costo = sliderToVal($event.target.value, 25000000, 1000)">
             </div>
             <div class="flex justify-between text-xs text-slate-400 mt-1">
               <span>0</span>
@@ -418,8 +437,11 @@ ${r?'Expression: "'+r+`"
               </div>
             </div>
             <div class="ls-wrapper" :style="sliderStyle('violet')">
-              <div class="ls-fill" :style="'width:' + pct(accKWh, 0, 5000) + '%'"></div>
-              <input type="range" class="ls relative" x-model.number="accKWh" min="0" max="5000" step="10" :disabled="!accumuloDisponibile">
+              <div class="ls-fill" :style="'width:' + (valToSlider(accKWh, 5000) / 10) + '%'"></div>
+              <input type="range" class="ls relative" min="0" max="1000" step="1"
+                     :value="valToSlider(accKWh, 5000)"
+                     @input="accKWh = sliderToVal($event.target.value, 5000, 1)"
+                     :disabled="!accumuloDisponibile">
             </div>
             <div class="flex justify-between text-xs text-slate-400 mt-1">
               <span>0</span>
@@ -435,8 +457,11 @@ ${r?'Expression: "'+r+`"
               </div>
             </div>
             <div class="ls-wrapper" :style="sliderStyle('violet')">
-              <div class="ls-fill" :style="'width:' + pct(accCosto, 0, 5000000) + '%'"></div>
-              <input type="range" class="ls relative" x-model.number="accCosto" min="0" max="5000000" step="10000" :disabled="!accumuloDisponibile">
+              <div class="ls-fill" :style="'width:' + (valToSlider(accCosto, 5000000) / 10) + '%'"></div>
+              <input type="range" class="ls relative" min="0" max="1000" step="1"
+                     :value="valToSlider(accCosto, 5000000)"
+                     @input="accCosto = sliderToVal($event.target.value, 5000000, 1000)"
+                     :disabled="!accumuloDisponibile">
             </div>
             <div class="flex justify-between text-xs text-slate-400 mt-1">
               <span>0</span>
