@@ -164,13 +164,15 @@ function simulatorData() {
       return this.potenza > 0 && elettriche.includes(this.codice);
     },
     get massImp() {
-      let c = 0, r = this.potenza, inf = 0;
-      for (const s of this.tec.scaglioni) {
-        if (r <= 0) break;
-        const a = s.max - inf, q = Math.min(r, a);
-        c += q * s.valore; r -= q; inf = s.max;
+      // Il parametro tabellare dello scaglione di appartenenza si applica all'intera potenza
+      // (logica a soglia piena, coerente con il DM Transizione 5.0 del 24 luglio 2024)
+      if (this.potenza <= 0) return 0;
+      const scaglioni = this.tec.scaglioni;
+      let parametro = scaglioni[scaglioni.length - 1].valore;
+      for (const s of scaglioni) {
+        if (this.potenza <= s.max) { parametro = s.valore; break; }
       }
-      return c;
+      return this.potenza * parametro;
     },
     get massAcc() { return this.accumuloDisponibile ? this.accKWh * 900 : 0; },
     get tetto() { return this.massImp + this.massAcc; },
