@@ -78,6 +78,48 @@ input[type="range"].ls:hover::-webkit-slider-thumb {
 
 .ic { display: inline-block; width: 1em; height: 1em; vertical-align: -0.125em; }
 .ic svg { width: 100%; height: 100%; display: block; }
+
+.nudge-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid rgb(226 232 240);
+  color: rgb(71 85 105);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s ease;
+  user-select: none;
+  padding: 0;
+}
+.nudge-btn:hover:not(:disabled) {
+  border-color: rgb(148 163 184);
+  background: rgb(248 250 252);
+  color: rgb(15 23 42);
+}
+.nudge-btn:active:not(:disabled) {
+  transform: scale(0.95);
+  background: rgb(241 245 249);
+}
+.nudge-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input[type="range"].ls:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+input[type="range"].ls:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+input[type="range"].ls:focus {
+  outline: none;
+}
 </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 via-white to-slate-50 min-h-screen">
@@ -231,6 +273,64 @@ function simulatorData() {
       return Math.max(0, Math.min(1000, Math.round(p * 1000)));
     },
 
+    // Step adattivo: incremento proporzionale alla grandezza del valore
+    // Garantisce controllo fine a bassi valori senza diventare frustrante sui valori alti
+    stepForValue(val, tipo) {
+      if (tipo === 'potenza') {
+        if (val < 20) return 1;
+        if (val < 200) return 10;
+        if (val < 1000) return 50;
+        return 100;
+      }
+      if (tipo === 'costo') {
+        if (val < 100000) return 1000;
+        if (val < 1000000) return 10000;
+        if (val < 5000000) return 50000;
+        return 100000;
+      }
+      if (tipo === 'kwh') {
+        if (val < 20) return 1;
+        if (val < 200) return 10;
+        if (val < 1000) return 50;
+        return 100;
+      }
+      if (tipo === 'acccosto') {
+        if (val < 100000) return 1000;
+        if (val < 500000) return 5000;
+        if (val < 2000000) return 25000;
+        return 50000;
+      }
+      return 1;
+    },
+
+    // Incremento/decremento via bottoni + / -
+    nudge(campo, tipo, direzione, max) {
+      const curr = this[campo];
+      const step = this.stepForValue(curr, tipo);
+      const nuovo = Math.max(0, Math.min(max, curr + (direzione * step)));
+      this[campo] = nuovo;
+    },
+
+    // Tastiera: frecce incrementano/decrementano; shift+freccia = step 10x
+    onSliderKey(e, campo, tipo, max) {
+      const keys = {
+        'ArrowLeft': -1, 'ArrowDown': -1,
+        'ArrowRight': 1, 'ArrowUp': 1,
+        'PageDown': -10, 'PageUp': 10,
+        'Home': 'min', 'End': 'max',
+      };
+      if (!(e.key in keys)) return;
+      e.preventDefault();
+      const k = keys[e.key];
+      if (k === 'min') { this[campo] = 0; return; }
+      if (k === 'max') { this[campo] = max; return; }
+      const multiplier = e.shiftKey ? 10 : 1;
+      const curr = this[campo];
+      const step = this.stepForValue(curr, tipo);
+      const nuovo = Math.max(0, Math.min(max, curr + (k * step * multiplier)));
+      this[campo] = nuovo;
+    },
+
     fmtEuro(n) { return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0); },
     fmtEuroM(n) {
       n = n || 0;
@@ -375,13 +475,19 @@ ${r?'Expression: "'+r+`"
                 <span class="text-xs font-normal text-slate-500" x-text="tec.unita"></span>
               </div>
             </div>
-            <div class="ls-wrapper" :style="sliderStyle(tec.color)">
-              <div class="ls-fill" :style="'width:' + (valToSlider(potenza, tec.maxPotenza) / 10) + '%'"></div>
-              <input type="range" class="ls relative" min="0" max="1000" step="1"
-                     :value="valToSlider(potenza, tec.maxPotenza)"
-                     @input="potenza = sliderToVal($event.target.value, tec.maxPotenza, 1)">
+            <div class="flex items-center gap-2">
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('potenza', 'potenza', -1, tec.maxPotenza)" :disabled="potenza <= 0" aria-label="Diminuisci potenza">−</button>
+              <div class="ls-wrapper flex-1" :style="sliderStyle(tec.color)">
+                <div class="ls-fill" :style="'width:' + (valToSlider(potenza, tec.maxPotenza) / 10) + '%'"></div>
+                <input type="range" class="ls relative" min="0" max="1000" step="1"
+                       :value="valToSlider(potenza, tec.maxPotenza)"
+                       @input="potenza = sliderToVal($event.target.value, tec.maxPotenza, 1)"
+                       @keydown="onSliderKey($event, 'potenza', 'potenza', tec.maxPotenza)"
+                       aria-label="Potenza installata">
+              </div>
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('potenza', 'potenza', 1, tec.maxPotenza)" :disabled="potenza >= tec.maxPotenza" aria-label="Aumenta potenza">+</button>
             </div>
-            <div class="flex justify-between text-xs text-slate-400 mt-1">
+            <div class="flex justify-between text-xs text-slate-400 mt-1 px-9">
               <span>0</span>
               <span x-text="fmtNum(tec.maxPotenza)"></span>
             </div>
@@ -394,13 +500,19 @@ ${r?'Expression: "'+r+`"
                 <span x-text="fmtEuroM(costo)"></span>
               </div>
             </div>
-            <div class="ls-wrapper" :style="sliderStyle(tec.color)">
-              <div class="ls-fill" :style="'width:' + (valToSlider(costo, 25000000) / 10) + '%'"></div>
-              <input type="range" class="ls relative" min="0" max="1000" step="1"
-                     :value="valToSlider(costo, 25000000)"
-                     @input="costo = sliderToVal($event.target.value, 25000000, 1000)">
+            <div class="flex items-center gap-2">
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('costo', 'costo', -1, 25000000)" :disabled="costo <= 0" aria-label="Diminuisci costo">−</button>
+              <div class="ls-wrapper flex-1" :style="sliderStyle(tec.color)">
+                <div class="ls-fill" :style="'width:' + (valToSlider(costo, 25000000) / 10) + '%'"></div>
+                <input type="range" class="ls relative" min="0" max="1000" step="1"
+                       :value="valToSlider(costo, 25000000)"
+                       @input="costo = sliderToVal($event.target.value, 25000000, 1000)"
+                       @keydown="onSliderKey($event, 'costo', 'costo', 25000000)"
+                       aria-label="Costo effettivo">
+              </div>
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('costo', 'costo', 1, 25000000)" :disabled="costo >= 25000000" aria-label="Aumenta costo">+</button>
             </div>
-            <div class="flex justify-between text-xs text-slate-400 mt-1">
+            <div class="flex justify-between text-xs text-slate-400 mt-1 px-9">
               <span>0</span>
               <span>25 mln</span>
             </div>
@@ -436,14 +548,20 @@ ${r?'Expression: "'+r+`"
                 <span class="text-xs font-normal text-slate-500">kWh</span>
               </div>
             </div>
-            <div class="ls-wrapper" :style="sliderStyle('violet')">
-              <div class="ls-fill" :style="'width:' + (valToSlider(accKWh, 5000) / 10) + '%'"></div>
-              <input type="range" class="ls relative" min="0" max="1000" step="1"
-                     :value="valToSlider(accKWh, 5000)"
-                     @input="accKWh = sliderToVal($event.target.value, 5000, 1)"
-                     :disabled="!accumuloDisponibile">
+            <div class="flex items-center gap-2">
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('accKWh', 'kwh', -1, 5000)" :disabled="!accumuloDisponibile || accKWh <= 0" aria-label="Diminuisci capacità">−</button>
+              <div class="ls-wrapper flex-1" :style="sliderStyle('violet')">
+                <div class="ls-fill" :style="'width:' + (valToSlider(accKWh, 5000) / 10) + '%'"></div>
+                <input type="range" class="ls relative" min="0" max="1000" step="1"
+                       :value="valToSlider(accKWh, 5000)"
+                       @input="accKWh = sliderToVal($event.target.value, 5000, 1)"
+                       @keydown="onSliderKey($event, 'accKWh', 'kwh', 5000)"
+                       :disabled="!accumuloDisponibile"
+                       aria-label="Capacità accumulo">
+              </div>
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('accKWh', 'kwh', 1, 5000)" :disabled="!accumuloDisponibile || accKWh >= 5000" aria-label="Aumenta capacità">+</button>
             </div>
-            <div class="flex justify-between text-xs text-slate-400 mt-1">
+            <div class="flex justify-between text-xs text-slate-400 mt-1 px-9">
               <span>0</span>
               <span>5.000</span>
             </div>
@@ -456,14 +574,20 @@ ${r?'Expression: "'+r+`"
                 <span x-text="fmtEuroM(accCosto)"></span>
               </div>
             </div>
-            <div class="ls-wrapper" :style="sliderStyle('violet')">
-              <div class="ls-fill" :style="'width:' + (valToSlider(accCosto, 5000000) / 10) + '%'"></div>
-              <input type="range" class="ls relative" min="0" max="1000" step="1"
-                     :value="valToSlider(accCosto, 5000000)"
-                     @input="accCosto = sliderToVal($event.target.value, 5000000, 1000)"
-                     :disabled="!accumuloDisponibile">
+            <div class="flex items-center gap-2">
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('accCosto', 'acccosto', -1, 5000000)" :disabled="!accumuloDisponibile || accCosto <= 0" aria-label="Diminuisci costo accumulo">−</button>
+              <div class="ls-wrapper flex-1" :style="sliderStyle('violet')">
+                <div class="ls-fill" :style="'width:' + (valToSlider(accCosto, 5000000) / 10) + '%'"></div>
+                <input type="range" class="ls relative" min="0" max="1000" step="1"
+                       :value="valToSlider(accCosto, 5000000)"
+                       @input="accCosto = sliderToVal($event.target.value, 5000000, 1000)"
+                       @keydown="onSliderKey($event, 'accCosto', 'acccosto', 5000000)"
+                       :disabled="!accumuloDisponibile"
+                       aria-label="Costo accumulo">
+              </div>
+              <button type="button" class="nudge-btn shrink-0" @click="nudge('accCosto', 'acccosto', 1, 5000000)" :disabled="!accumuloDisponibile || accCosto >= 5000000" aria-label="Aumenta costo accumulo">+</button>
             </div>
-            <div class="flex justify-between text-xs text-slate-400 mt-1">
+            <div class="flex justify-between text-xs text-slate-400 mt-1 px-9">
               <span>0</span>
               <span>5 mln</span>
             </div>
